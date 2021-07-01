@@ -1,7 +1,13 @@
-const { app, BrowserWindow, Menu, globalShortcut } = require('electron');
+const path = require('path');
+const os = require('os');
+const imagemin = require('imagemin');
+const imageminMozjpeg = require('imagemin-mozjpeg');
+const imageminpngquant = require('imagemin-pngquant'); 
+const slash = require('slash');
+const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron');
 
 // Set enviroment
-process.env.NODE_ENV = 'developement';
+process.env.NODE_ENV = 'production';
 
 const isDev = process.env.NODE_ENV !== 'production' ? true : false;
 
@@ -17,7 +23,7 @@ function createMainWindow () {
         backgroundColor: 'white',
         width: isDev ? 800 : 500,
         height: 600,
-        webPreferences: { worldSafeExecuteJavaScript: true },
+        webPreferences: { worldSafeExecuteJavaScript: true, nodeIntegration: true },
         icon: `${__dirname}/assets/icons/Icon_256x256.png`,
         // resizable in dev to allow for devTools.
         resizable: isDev ? true : false
@@ -36,7 +42,7 @@ function createAboutWindow () {
         backgroundColor: 'white',
         width: 300,
         height: 300,
-        webPreferences: { worldSafeExecuteJavaScript: true },
+        webPreferences: { worldSafeExecuteJavaScript: true, contextIsolation: true },
         icon: `${__dirname}/assets/icons/Icon_256x256.png`,
         // resizable in dev to allow for devTools.
         resizable: false,
@@ -89,6 +95,32 @@ const menu = [
             ]
         } ] : []), 
 ]
+
+ipcMain.on('img:minimize', (e, options) => {
+    options.dest = path.join(os.homedir(), 'imageshrink');
+    shrinkImage(options);
+});
+
+
+async function shrinkImage({imgPath, quality, dest}) {
+    try {
+        const pngQuality = quality / 100;
+        const files = await imagemin([slash(imgPath)], {
+            destination: dest,
+            plugins: [
+                imageminMozjpeg({quality}),
+                imageminpngquant({quality:[pngQuality, pngQuality]})
+            ]
+        });
+
+        shell.openPath(dest);  
+        
+        mainWindow.webContents.send('img:done');
+
+    } catch (err) {
+        console.log(err);
+    }
+}
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
